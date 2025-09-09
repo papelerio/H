@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dibujador de Polígonos - Modos Avanzados</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+        
+        #canvas-container {
+            position: relative;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        #drawing-canvas {
+            background: #f8f9fa;
+            cursor: crosshair;
+            display: block;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .control-group h3 {
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            color: #2c3e50;
+        }
+        
+        .color-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #color-selector {
+            width: 60px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn {
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .btn-success {
+            background: #2ecc71;
+        }
+        
+        .btn-success:hover {
+            background: #27ae60;
+        }
+        
+        .btn-warning {
+            background: #f39c12;
+        }
+        
+        .btn-warning:hover {
+            background: #d35400;
+        }
+        
+        .btn-purple {
+            background: #9b59b6;
+        }
+        
+        .btn-purple:hover {
+            background: #8e44ad;
+        }
+        
+        .btn-teal {
+            background: #1abc9c;
+        }
+        
+        .btn-teal:hover {
+            background: #16a085;
+        }
+        
+        .btn-active {
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.5);
+        }
+        
+        .coordinates {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .coordinate-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .instructions {
+            background: #fff8e1;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        
+        .instructions ul {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .json-output {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-label {
+            display: block;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            background: #9b59b6;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: background 0.3s;
+        }
+        
+        .file-label:hover {
+            background: #8e44ad;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .mode-indicator {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .drawing-mode {
+            color: #3498db;
+        }
+        
+        .moving-mode {
+            color: #e74c3c;
+        }
+        
+        .delete-mode {
+            color: #c0392b;
+        }
+        
+        .hidden-points-mode {
+            color: #7f8c8d;
+        }
+        
+        .mode-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .mode-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Dibujador de Polígonos - Modos Avanzados</h1>
+            <p>Dibuja, mueve puntos, elimina puntos y oculta puntos</p>
+        </header>
+        
+        <div class="main-content">
+            <div id="canvas-container">
+                <div id="mode-indicator" class="mode-indicator drawing-mode">Modo: Dibujo</div>
+                <canvas id="drawing-canvas" width="800" height="500"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <h3>Color del Polígono</h3>
+                    <div class="color-picker">
+                        <input type="color" id="color-selector" value="#3498db">
+                        <span id="color-value">#3498db</span>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Puntos</h3>
+                    <div class="coordinates" id="points-list">
+                        <p>No hay puntos aún</p>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Modos de Edición</h3>
+                    <div class="mode-buttons">
+                        <button class="btn btn-active" id="draw-mode-btn" data-mode="draw">Dibujar</button>
+                        <button class="btn" id="move-mode-btn" data-mode="move">Mover</button>
+                        <button class="btn btn-danger" id="delete-mode-btn" data-mode="delete">Eliminar</button>
+                        <button class="btn btn-teal" id="hide-points-btn" data-mode="hide">Ocultar Puntos</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Acciones</h3>
+                    <button class="btn btn-success" id="export-btn">Exportar a JSON</button>
+                    <button class="btn btn-purple" id="download-btn">Descargar JSON</button>
+                    <label for="import-file" class="file-label">Importar JSON</label>
+                    <input type="file" id="import-file" class="file-input" accept=".json">
+                    <button class="btn btn-warning" id="clear-btn">Limpiar Todo</button>
+                </div>
+                
+                <div class="control-group">
+                    <h3>JSON Exportado</h3>
+                    <div class="json-output" id="json-output">{
+    "polygon": {
+        "points": [],
+        "color": "#3498db",
+        "closed": false
+    }
+}</div>
+                </div>
+                
+                <div class="instructions">
+                    <h3>Instrucciones</h3>
+                    <ul>
+                        <li><strong>Modo Dibujo:</strong> Haz clic para añadir puntos</li>
+                        <li><strong>Modo Mover:</strong> Arrastra puntos para ajustarlos</li>
+                        <li><strong>Modo Eliminar:</strong> Haz clic en un punto para eliminarlo</li>
+                        <li><strong>Ocultar Puntos:</strong> Oculta los puntos para ver el polígono limpio</li>
+                        <li>Haz clic en el primer punto para cerrar el polígono</li>
+                        <li>Exporta o descarga los datos a JSON</li>
+                        <li>Importa JSON para editar figuras existentes</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Dibujador de Polígonos Avanzado &copy; 2023 - Para uso en juegos y proyectos</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('drawing-canvas');
+            const ctx = canvas.getContext('2d');
+            const colorSelector = document.getElementById('color-selector');
+            const colorValue = document.getElementById('color-value');
+            const pointsList = document.getElementById('points-list');
+            const jsonOutput = document.getElementById('json-output');
+            const exportBtn = document.getElementById('export-btn');
+            const downloadBtn = document.getElementById('download-btn');
+            const importFile = document.getElementById('import-file');
+            const clearBtn = document.getElementById('clear-btn');
+            const modeIndicator = document.getElementById('mode-indicator');
+            
+            // Botones de modo
+            const drawModeBtn = document.getElementById('draw-mode-btn');
+            const moveModeBtn = document.getElementById('move-mode-btn');
+            const deleteModeBtn = document.getElementById('delete-mode-btn');
+            const hidePointsBtn = document.getElementById('hide-points-btn');
+            
+            let points = [];
+            let isDrawing = false;
+            let isPolygonClosed = false;
+            let currentColor = colorSelector.value;
+            let currentMode = 'draw'; // draw, move, delete, hide
+            let selectedPointIndex = -1;
+            let isDragging = false;
+            let showPoints = true;
+            
+            // Ajustar el tamaño del canvas según el contenedor
+            function resizeCanvas() {
+                const container = document.getElementById('canvas-container');
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                redrawCanvas();
+            }
+            
+            // Redibujar el canvas
+            function redrawCanvas() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                if (points.length > 0) {
+                    // Dibujar puntos si no están ocultos
+                    if (showPoints) {
+                        for (let i = 0; i < points.length; i++) {
+                            drawPoint(points[i].x, points[i].y, i === 0);
+                        }
+                    }
+                    
+                    // Dibujar líneas si hay al menos 2 puntos
+                    if (points.length > 1) {
+                        ctx.beginPath();
+                        ctx.moveTo(points[0].x, points[0].y);
+                        
+                        for (let i = 1; i < points.length; i++) {
+                            ctx.lineTo(points[i].x, points[i].y);
+                        }
+                        
+                        // Si el polígono está cerrado, dibujar la última línea y rellenar
+                        if (isPolygonClosed) {
+                            ctx.closePath();
+                            ctx.fillStyle = currentColor + '80'; // Color con transparencia
+                            ctx.fill();
+                            ctx.strokeStyle = currentColor;
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        } else {
+                            ctx.strokeStyle = '#3498db';
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+            
+            // Dibujar un punto
+            function drawPoint(x, y, isFirst = false) {
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = isFirst ? '#e74c3c' : '#2ecc71';
+                ctx.fill();
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            
+            // Verificar si el clic está cerca de un punto existente
+            function isNearPoint(x, y, point) {
+                return Math.abs(x - point.x) < 10 && Math.abs(y - point.y) < 10;
+            }
+            
+            // Obtener el índice del punto cercano al clic
+            function getPointIndexNear(x, y) {
+                for (let i = 0; i < points.length; i++) {
+                    if (isNearPoint(x, y, points[i])) {
+                        return i;
+                    }
+                }
+                return -1;
+            }
+            
+            // Actualizar la lista de puntos en la UI
+            function updatePointsList() {
+                if (points.length === 0) {
+                    pointsList.innerHTML = '<p>No hay puntos aún</p>';
+                    return;
+                }
+                
+                pointsList.innerHTML = '';
+                points.forEach((point, index) => {
+                    const pointElement = document.createElement('div');
+                    pointElement.className = 'coordinate-item';
+                    pointElement.innerHTML = `
+                        <span>Punto ${index + 1}:</span>
+                        <span>(${Math.round(point.x)}, ${Math.round(point.y)})</span>
+                    `;
+                    pointsList.appendChild(pointElement);
+                });
+            }
+            
+            // Cambiar modo
+            function setMode(mode) {
+                currentMode = mode;
+                
+                // Actualizar botones
+                document.querySelectorAll('[data-mode]').forEach(btn => {
+                    btn.classList.remove('btn-active');
+                });
+                document.querySelector(`[data-mode="${mode}"]`).classList.add('btn-active');
+                
+                // Actualizar indicador y cursor
+                switch(mode) {
+                    case 'draw':
+                        modeIndicator.textContent = 'Modo: Dibujo';
+                        modeIndicator.className = 'mode-indicator drawing-mode';
+                        canvas.style.cursor = 'crosshair';
+                        break;
+                    case 'move':
+                        modeIndicator.textContent = 'Modo: Mover Puntos';
+                        modeIndicator.className = 'mode-indicator moving-mode';
+                        canvas.style.cursor = 'move';
+                        break;
+                    case 'delete':
+                        modeIndicator.textContent = 'Modo: Eliminar Puntos';
+                        modeIndicator.className = 'mode-indicator delete-mode';
+                        canvas.style.cursor = 'not-allowed';
+                        break;
+                    case 'hide':
+                        modeIndicator.textContent = 'Modo: Puntos Ocultos';
+                        modeIndicator.className = 'mode-indicator hidden-points-mode';
+                        canvas.style.cursor = 'default';
+                        break;
+                }
+                
+                redrawCanvas();
+            }
+            
+            // Eliminar un punto
+            function deletePoint(index) {
+                if (points.length <= 3) {
+                    alert('Un polígono debe tener al menos 3 puntos.');
+                    return;
+                }
+                
+                points.splice(index, 1);
+                
+                // Si era el primer punto y el polígono estaba cerrado, actualizar
+                if (index === 0 && isPolygonClosed) {
+                    isPolygonClosed = false;
+                }
+                
+                updatePointsList();
+                redrawCanvas();
+                exportToJSON();
+            }
+            
+            // Alternar visibilidad de puntos
+            function togglePointsVisibility() {
+                showPoints = !showPoints;
+                hidePointsBtn.textContent = showPoints ? 'Ocultar Puntos' : 'Mostrar Puntos';
+                redrawCanvas();
+            }
+            
+            // Exportar a JSON
+            function exportToJSON() {
+                const data = {
+                    polygon: {
+                        points: points,
+                        color: currentColor,
+                        closed: isPolygonClosed
+                    }
+                };
+                
+                jsonOutput.textContent = JSON.stringify(data, null, 4);
+                return JSON.stringify(data, null, 4);
+            }
+            
+            // Descargar JSON
+            function downloadJSON() {
+                const jsonData = exportToJSON();
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'poligono.json';
+                document.body.appendChild(a);
+                a.click();
+                
+                // Limpiar
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+            }
+            
+            // Importar JSON
+            function importJSON(jsonData) {
+                try {
+                    const data = JSON.parse(jsonData);
+                    
+                    if (data.polygon && data.polygon.points) {
+                        points = data.polygon.points;
+                        currentColor = data.polygon.color || '#3498db';
+                        isPolygonClosed = data.polygon.closed || false;
+                        
+                        colorSelector.value = currentColor;
+                        colorValue.textContent = currentColor;
+                        
+                        updatePointsList();
+                        redrawCanvas();
+                        exportToJSON();
+                    } else {
+                        alert('El archivo JSON no tiene el formato correcto.');
+                    }
+                } catch (error) {
+                    alert('Error al importar el archivo JSON: ' + error.message);
+                }
+            }
+            
+            // Evento de clic en el canvas
+            canvas.addEventListener('mousedown', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                if (currentMode === 'move' && isPolygonClosed) {
+                    // Modo mover: seleccionar punto para arrastrar
+                    selectedPointIndex = getPointIndexNear(x, y);
+                    if (selectedPointIndex !== -1) {
+                        isDragging = true;
+                    }
+                } else if (currentMode === 'delete') {
+                    // Modo eliminar: eliminar punto
+                    const pointIndex = getPointIndexNear(x, y);
+                    if (pointIndex !== -1) {
+                        deletePoint(pointIndex);
+                    }
+                } else if (currentMode === 'draw') {
+                    // Modo dibujo: añadir puntos o cerrar polígono
+                    if (isPolygonClosed) return;
+                    
+                    // Si es el primer punto
+                    if (points.length === 0) {
+                        points.push({x, y});
+                        isDrawing = true;
+                    } 
+                    // Si hay puntos y se hace clic cerca del primero, cerrar el polígono
+                    else if (points.length > 2 && isNearPoint(x, y, points[0])) {
+                        isPolygonClosed = true;
+                    }
+                    // Añadir un nuevo punto
+                    else {
+                        // Verificar que no se hace clic en un punto existente
+                        if (getPointIndexNear(x, y) === -1) {
+                            points.push({x, y});
+                        }
+                    }
+                }
+                
+                updatePointsList();
+                redrawCanvas();
+            });
+            
+            // Evento de mover mouse en el canvas
+            canvas.addEventListener('mousemove', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                if (isDragging && selectedPointIndex !== -1) {
+                    // Mover el punto seleccionado
+                    points[selectedPointIndex].x = x;
+                    points[selectedPointIndex].y = y;
+                    redrawCanvas();
+                }
+            });
+            
+            // Evento de soltar mouse
+            canvas.addEventListener('mouseup', function() {
+                isDragging = false;
+                selectedPointIndex = -1;
+                exportToJSON();
+            });
+            
+            // Evento para cambiar color
+            colorSelector.addEventListener('input', function() {
+                currentColor = this.value;
+                colorValue.textContent = currentColor;
+                redrawCanvas();
+                exportToJSON();
+            });
+            
+            // Eventos para cambiar modos
+            drawModeBtn.addEventListener('click', () => setMode('draw'));
+            moveModeBtn.addEventListener('click', () => setMode('move'));
+            deleteModeBtn.addEventListener('click', () => setMode('delete'));
+            hidePointsBtn.addEventListener('click', togglePointsVisibility);
+            
+            // Evento para exportar a JSON
+            exportBtn.addEventListener('click', exportToJSON);
+            
+            // Evento para descargar JSON
+            downloadBtn.addEventListener('click', downloadJSON);
+            
+            // Evento para importar JSON
+            importFile.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        importJSON(e.target.result);
+                    };
+                    reader.readAsText(file);
+                }
+            });
+            
+            // Evento para limpiar todo
+            clearBtn.addEventListener('click', function() {
+                points = [];
+                isDrawing = false;
+                isPolygonClosed = false;
+                setMode('draw');
+                updatePointsList();
+                redrawCanvas();
+                exportToJSON();
+            });
+            
+            // Inicializar
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+        });
+    </script>
+</body>
+</html>
