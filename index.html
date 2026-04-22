@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprite Animator Pro</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Visualizador -->
+    <main class="visualizer-panel">
+      <div class="canvas-container">
+        <canvas id="visualizer-canvas"></canvas>
+        <div class="canvas-overlay">
+          <h2 id="current-character-name">Ningún personaje seleccionado</h2>
+          <p id="current-animation-name" class="subtitle">Selecciona un personaje de la derecha para empezar</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Panel Lateral -->
+    <aside class="sidebar glass-panel">
+      <header class="sidebar-header">
+        <h1>Personajes</h1>
+        <button id="btn-add-character" class="btn btn-primary pulse-hover">
+          <span>+</span> Nuevo
+        </button>
+      </header>
+      
+      <div id="character-list" class="character-list">
+        <!-- Los personajes se insertarán aquí dinámicamente -->
+      </div>
+    </aside>
+  </div>
+
+  <!-- Modal de Edición de Personaje -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content glass-panel">
+      <header class="modal-header">
+        <h2 id="modal-title">Editar Personaje</h2>
+        <button id="btn-close-modal" class="btn-icon">&times;</button>
+      </header>
+      
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="char-name">Nombre del Personaje</label>
+          <input type="text" id="char-name" class="input-modern" placeholder="Ej. Héroe">
+        </div>
+
+        <div class="animations-section">
+          <div class="animations-header">
+            <h3>Animaciones</h3>
+            <button id="btn-add-animation" class="btn btn-secondary btn-small">+ Añadir Animación</button>
+          </div>
+          <div id="animations-list" class="animations-list">
+            <!-- Animaciones dinámicas -->
+          </div>
+        </div>
+      </div>
+      
+      <footer class="modal-footer">
+        <button id="btn-save-character" class="btn btn-primary">Guardar Personaje</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
