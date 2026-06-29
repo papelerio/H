@@ -18,6 +18,19 @@
           <h2 id="current-character-name">Ningún personaje seleccionado</h2>
           <p id="current-animation-name" class="subtitle">Selecciona un personaje de la derecha para empezar</p>
         </div>
+
+        <div class="canvas-tools glass-panel">
+          <div class="tool-group">
+            <label>Fondo:</label>
+            <div class="bg-presets">
+              <button class="bg-dot active" data-color="transparent" title="Cuadrícula"></button>
+              <button class="bg-dot" data-color="#00ff00" title="Chroma Green" style="background:#00ff00"></button>
+              <button class="bg-dot" data-color="#0000ff" title="Chroma Blue" style="background:#0000ff"></button>
+              <button class="bg-dot" data-color="#ffffff" title="Blanco" style="background:#ffffff"></button>
+              <input type="color" id="custom-bg-picker" title="Color personalizado" value="#0f172a">
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -54,7 +67,6 @@
         <div class="animations-section">
           <div class="animations-header">
             <h3>Animaciones</h3>
-            <button id="btn-add-animation" class="btn btn-secondary btn-small">+ Añadir Animación</button>
           </div>
           <div id="animations-list" class="animations-list">
             <!-- Animaciones dinámicas -->
@@ -63,6 +75,7 @@
       </div>
       
       <footer class="modal-footer">
+        <button id="btn-add-animation" class="btn btn-secondary">+ Añadir Animación</button>
         <button id="btn-save-character" class="btn btn-primary">Guardar Personaje</button>
       </footer>
     </div>

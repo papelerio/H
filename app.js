@@ -9,6 +9,7 @@ let characters = [];
 let activeCharacter = null;
 let editingCharacter = null;
 let activeAnimState = null; // Para la reproducción en canvas
+const globalImageCache = new Map();
 
 // Estado de inserción de imágenes
 let waitingAnimId = null;
@@ -41,49 +42,69 @@ const keysHeld = new Set();
 
 function renderLoop(timestamp) {
   requestAnimationFrame(renderLoop);
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (!activeCharacter || !activeAnimState) return;
+  if (!activeCharacter || !activeAnimState) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
-  const anim = activeAnimState.anim;
+  // Obtenemos la animación actual
+  let anim = activeAnimState.anim;
   if (!anim || !anim.frames || anim.frames.length === 0) return;
 
-  // Actualizar frame
+  // 1. Corte inmediato para modo 'hold-immediate'
+  if (anim.repeatMode === 'hold-immediate' && !keysHeld.has(anim.shortcut.toLowerCase())) {
+    activeAnimState.frameIndex = anim.frames.length;
+  }
+
+  // 2. Actualizar frame por tiempo
   if (timestamp - lastFrameTime > (1000 / anim.fps)) {
     lastFrameTime = timestamp;
     const currentFrame = anim.frames[activeAnimState.frameIndex];
-    if (!currentFrame) {
-      activeAnimState.frameIndex = 0;
-      return;
+    
+    if (currentFrame) {
+      activeAnimState.repeatCount++;
+      if (activeAnimState.repeatCount >= (currentFrame.repeat || 1)) {
+        activeAnimState.repeatCount = 0;
+        activeAnimState.frameIndex++;
+      }
+    } else if (activeAnimState.frameIndex < anim.frames.length) {
+      activeAnimState.frameIndex++;
+    }
+  }
+
+  // 3. Lógica de fin de ciclo o transición
+  if (activeAnimState.frameIndex >= anim.frames.length) {
+    let shouldRepeat = false;
+
+    if (anim.repeatMode === 'loop') {
+      shouldRepeat = true;
+    } else if (anim.repeatMode === 'hold' && keysHeld.has(anim.shortcut.toLowerCase())) {
+      shouldRepeat = true;
+    } else if (anim.repeatMode === 'hold-immediate' && keysHeld.has(anim.shortcut.toLowerCase())) {
+      // Si llegamos al final del ciclo y aún se presiona, repetimos
+      shouldRepeat = true;
+    } else if (anim.repeatMode === 'times' && activeAnimState.loopCount < (anim.repeatTimes || 1) - 1) {
+      shouldRepeat = true;
+      activeAnimState.loopCount++;
     }
 
-    activeAnimState.repeatCount++;
-
-    if (activeAnimState.repeatCount >= (currentFrame.repeat || 1)) {
+    if (shouldRepeat) {
+      activeAnimState.frameIndex = 0;
       activeAnimState.repeatCount = 0;
-      activeAnimState.frameIndex++;
-
-      if (activeAnimState.frameIndex >= anim.frames.length) {
-        // Fin de la animación
-        if (anim.repeatMode === 'loop') {
-          activeAnimState.frameIndex = 0;
-        } else if (anim.repeatMode === 'hold' && keysHeld.has(anim.shortcut.toLowerCase())) {
-          activeAnimState.frameIndex = 0; // Repetir mientras se presiona
-        } else if (anim.repeatMode === 'times' && activeAnimState.loopCount < anim.repeatTimes - 1) {
-          activeAnimState.frameIndex = 0;
-          activeAnimState.loopCount++;
+    } else {
+      // No repite: ¿Hay animación siguiente?
+      if (anim.nextAnim) {
+        const nextAnimObj = activeCharacter.animations.find(a => a.id === anim.nextAnim);
+        if (nextAnimObj) {
+          playAnimation(nextAnimObj);
+          anim = activeAnimState.anim; // Actualizar referencia para el dibujo
         } else {
-          // Ir a la siguiente animación si existe
-          if (anim.nextAnim) {
-            const nextAnimObj = activeCharacter.animations.find(a => a.id === anim.nextAnim);
-            if (nextAnimObj) {
-              playAnimation(nextAnimObj);
-              return;
-            }
-          }
-          // Si no hay siguiente y terminó, quedarse en el último frame o detener
-          activeAnimState.frameIndex = anim.frames.length - 1; 
+          activeAnimState.frameIndex = anim.frames.length - 1;
         }
+      } else {
+        // Quedarse en el último frame
+        activeAnimState.frameIndex = anim.frames.length - 1;
       }
     }
   }
@@ -93,14 +114,16 @@ function renderLoop(timestamp) {
   if (frame && frame.src) {
     const imgUrl = frame.src;
 
-    if (!activeAnimState.imgCache[activeAnimState.frameIndex]) {
+    if (!globalImageCache.has(imgUrl)) {
       const img = new Image();
       img.src = imgUrl;
-      activeAnimState.imgCache[activeAnimState.frameIndex] = img;
+      globalImageCache.set(imgUrl, img);
     }
-    const img = activeAnimState.imgCache[activeAnimState.frameIndex];
+    
+    const img = globalImageCache.get(imgUrl);
     if (img.complete) {
-      // Centrar imagen
+      // Limpiar y dibujar solo cuando la imagen está lista para evitar parpadeo
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const x = (canvas.width - img.width) / 2;
       const y = (canvas.height - img.height) / 2;
       ctx.drawImage(img, x, y);
@@ -138,8 +161,7 @@ function playAnimation(anim) {
     anim: anim,
     frameIndex: 0,
     loopCount: 0,
-    repeatCount: 0,
-    imgCache: {}
+    repeatCount: 0
   };
   UI.activeAnimName.innerText = `Animación: ${anim.name} (FPS: ${anim.fps})`;
   lastFrameTime = performance.now();
@@ -284,7 +306,8 @@ function renderAnimationsList() {
           <div style="display:flex; gap: 4px;">
             <select class="input-modern" style="flex:1" onchange="updateAnimMode(${index}, this.value)">
               <option value="times" ${anim.repeatMode === 'times' ? 'selected' : ''}>Veces</option>
-              <option value="hold" ${anim.repeatMode === 'hold' ? 'selected' : ''}>Mantener</option>
+              <option value="hold" ${anim.repeatMode === 'hold' ? 'selected' : ''}>Mantener (Ciclo completo)</option>
+              <option value="hold-immediate" ${anim.repeatMode === 'hold-immediate' ? 'selected' : ''}>Mantener (Con cortes)</option>
               <option value="loop" ${anim.repeatMode === 'loop' ? 'selected' : ''}>Bucle infinito</option>
             </select>
             <input type="number" class="input-modern" style="width: 50px; display: ${anim.repeatMode === 'times' ? 'block' : 'none'}" value="${anim.repeatTimes}" onchange="updateAnim(${index}, 'repeatTimes', parseInt(this.value))" min="1">
@@ -467,3 +490,36 @@ document.getElementById('btn-save-character').onclick = async () => {
 
 // Iniciar
 loadCharacters();
+
+// --- Lógica de Controles de Fondo ---
+const canvasContainer = document.querySelector('.canvas-container');
+const bgDots = document.querySelectorAll('.bg-dot');
+const customBgPicker = document.getElementById('custom-bg-picker');
+
+bgDots.forEach(dot => {
+  dot.onclick = () => {
+    const color = dot.getAttribute('data-color');
+    
+    // UI
+    bgDots.forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+
+    if (color === 'transparent') {
+      canvasContainer.classList.remove('no-grid');
+      canvasContainer.style.backgroundColor = '#0f172a';
+    } else {
+      canvasContainer.classList.add('no-grid');
+      canvasContainer.style.backgroundColor = color;
+      customBgPicker.value = color; // Sincronizar el picker
+    }
+  };
+});
+
+customBgPicker.oninput = (e) => {
+  const color = e.target.value;
+  canvasContainer.classList.add('no-grid');
+  canvasContainer.style.backgroundColor = color;
+  
+  // Marcar como activo solo si no es un preset
+  bgDots.forEach(d => d.classList.remove('active'));
+};
