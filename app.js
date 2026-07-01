@@ -14,6 +14,15 @@ const globalImageCache = new Map();
 // Estado de inserción de imágenes
 let waitingAnimId = null;
 
+// Estado de zoom y paneo del Canvas
+let zoomScale = 1.0;
+let panX = 0;
+let panY = 0;
+let isPanning = false;
+let startPanX = 0;
+let startPanY = 0;
+let isAutoFit = true; // Autoajuste activado por defecto
+
 // --- Elementos del DOM ---
 const canvas = document.getElementById('visualizer-canvas');
 const ctx = canvas.getContext('2d');
@@ -24,7 +33,12 @@ const charNameInput = document.getElementById('char-name');
 
 const UI = {
   activeCharName: document.getElementById('current-character-name'),
-  activeAnimName: document.getElementById('current-animation-name')
+  activeAnimName: document.getElementById('current-animation-name'),
+  zoomValue: document.getElementById('zoom-value'),
+  btnZoomIn: document.getElementById('btn-zoom-in'),
+  btnZoomOut: document.getElementById('btn-zoom-out'),
+  btnZoomFit: document.getElementById('btn-zoom-fit'),
+  btnZoomReset: document.getElementById('btn-zoom-reset')
 };
 
 // Ajustar tamaño del canvas
@@ -122,11 +136,26 @@ function renderLoop(timestamp) {
     
     const img = globalImageCache.get(imgUrl);
     if (img.complete) {
+      if (isAutoFit) {
+        // Calcular escala de ajuste (con un 10% de margen)
+        const scaleX = (canvas.width * 0.9) / img.width;
+        const scaleY = (canvas.height * 0.9) / img.height;
+        zoomScale = Math.min(scaleX, scaleY);
+        // Evitar que el zoom de autoajuste sea gigante si la imagen es minúscula, pero permitir que se autoajuste
+        updateZoomUI();
+      }
+
       // Limpiar y dibujar solo cuando la imagen está lista para evitar parpadeo
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const x = (canvas.width - img.width) / 2;
-      const y = (canvas.height - img.height) / 2;
-      ctx.drawImage(img, x, y);
+      
+      ctx.save();
+      // Trasladar al centro del canvas más el desplazamiento del paneo
+      ctx.translate(canvas.width / 2 + panX, canvas.height / 2 + panY);
+      // Aplicar zoom
+      ctx.scale(zoomScale, zoomScale);
+      // Dibujar imagen centrada en el origen trasladado
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.restore();
     }
   }
 }
@@ -167,6 +196,104 @@ function playAnimation(anim) {
   lastFrameTime = performance.now();
 }
 
+// --- Funciones del Sistema de Zoom ---
+function updateZoomUI() {
+  if (UI.zoomValue) {
+    UI.zoomValue.innerText = `${Math.round(zoomScale * 100)}%`;
+  }
+  if (UI.btnZoomFit) {
+    if (isAutoFit) {
+      UI.btnZoomFit.classList.add('active');
+    } else {
+      UI.btnZoomFit.classList.remove('active');
+    }
+  }
+}
+
+function setZoom(newScale, centerX, centerY) {
+  const oldScale = zoomScale;
+  // Limitar zoom entre 5% y 2000%
+  zoomScale = Math.max(0.05, Math.min(20.0, newScale));
+  isAutoFit = false;
+
+  // Ajustar paneo para centrar el zoom en el cursor
+  if (centerX !== undefined && centerY !== undefined) {
+    const relX = centerX - canvas.width / 2;
+    const relY = centerY - canvas.height / 2;
+    panX = relX - (relX - panX) * (zoomScale / oldScale);
+    panY = relY - (relY - panY) * (zoomScale / oldScale);
+  }
+  
+  updateZoomUI();
+}
+
+function resetZoom() {
+  zoomScale = 1.0;
+  panX = 0;
+  panY = 0;
+  isAutoFit = false;
+  updateZoomUI();
+}
+
+function enableAutoFit() {
+  isAutoFit = true;
+  panX = 0;
+  panY = 0;
+  updateZoomUI();
+}
+
+// --- Eventos del Mouse y Controles de Zoom ---
+if (UI.btnZoomIn) {
+  UI.btnZoomIn.onclick = () => setZoom(zoomScale * 1.2);
+}
+if (UI.btnZoomOut) {
+  UI.btnZoomOut.onclick = () => setZoom(zoomScale / 1.2);
+}
+if (UI.btnZoomFit) {
+  UI.btnZoomFit.onclick = () => enableAutoFit();
+}
+if (UI.btnZoomReset) {
+  UI.btnZoomReset.onclick = () => resetZoom();
+}
+
+// Paneo con el click del mouse (arrastrar)
+canvas.addEventListener('mousedown', (e) => {
+  if (!activeCharacter || !activeAnimState) return;
+  isPanning = true;
+  startPanX = e.clientX - panX;
+  startPanY = e.clientY - panY;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = e.clientX - startPanX;
+  panY = e.clientY - startPanY;
+  isAutoFit = false;
+  updateZoomUI();
+});
+
+window.addEventListener('mouseup', () => {
+  isPanning = false;
+});
+
+// Zoom con rueda del ratón
+canvas.addEventListener('wheel', (e) => {
+  if (!activeCharacter || !activeAnimState) return;
+  e.preventDefault();
+  
+  const zoomFactor = 1.1;
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  
+  if (e.deltaY < 0) {
+    setZoom(zoomScale * zoomFactor, mouseX, mouseY);
+  } else {
+    setZoom(zoomScale / zoomFactor, mouseX, mouseY);
+  }
+}, { passive: false });
+
+
 // --- Gestión de Datos ---
 async function loadCharacters() {
   characters = await db.characters.toArray();
@@ -198,6 +325,9 @@ function renderCharacterList() {
 function selectCharacter(char) {
   activeCharacter = char;
   activeAnimState = null;
+  isAutoFit = true;
+  panX = 0;
+  panY = 0;
   UI.activeCharName.innerText = char.name;
   UI.activeAnimName.innerText = char.animations.length > 0 
     ? "Presiona el atajo de una animación" 
