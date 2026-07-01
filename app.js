@@ -14,6 +14,10 @@ const globalImageCache = new Map();
 // Estado de inserción de imágenes
 let waitingAnimId = null;
 
+// Estado para reemplazar un frame específico
+let waitingReplaceFrame = null; // { animId, frameIndex }
+let contextMenuTarget = null; // { animId, frameIndex }
+
 // Estado de zoom y paneo del Canvas
 let zoomScale = 1.0;
 let panX = 0;
@@ -294,6 +298,106 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
+// --- Lógica de Menú Contextual y Copiar/Reemplazar ---
+async function copyImageToClipboard(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(img, 0, 0);
+      tempCanvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob })
+            ]);
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        } else {
+          reject(new Error("No se pudo generar el blob PNG."));
+        }
+      }, 'image/png');
+    };
+    img.onerror = (err) => reject(err);
+    img.src = dataUrl;
+  });
+}
+
+window.showFrameContextMenu = (event, animId, frameIndex) => {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  contextMenuTarget = { animId, frameIndex };
+  
+  const menu = document.getElementById('context-menu');
+  if (menu) {
+    menu.style.left = `${event.clientX}px`;
+    menu.style.top = `${event.clientY}px`;
+    menu.classList.remove('hidden');
+  }
+};
+
+window.handleFrameClick = (event, animId, fIndex) => {
+  if (waitingReplaceFrame && waitingReplaceFrame.animId === animId && waitingReplaceFrame.frameIndex === fIndex) {
+    event.stopPropagation();
+    // Selector de archivos manual para reemplazar
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      if (e.target.files.length > 0) {
+        replaceFrameFile(e.target.files[0], animId, fIndex);
+      }
+    };
+    input.click();
+  }
+};
+
+// Cerrar menú al hacer clic fuera
+window.addEventListener('click', () => {
+  const menu = document.getElementById('context-menu');
+  if (menu) menu.classList.add('hidden');
+});
+
+// Eventos de los botones del menú contextual
+document.getElementById('menu-copy').onclick = async (e) => {
+  e.stopPropagation();
+  if (!contextMenuTarget) return;
+  const { animId, frameIndex } = contextMenuTarget;
+  const anim = editingCharacter.animations.find(a => a.id === animId);
+  if (anim && anim.frames[frameIndex]) {
+    const frame = anim.frames[frameIndex];
+    const src = typeof frame === 'string' ? frame : frame.src;
+    try {
+      await copyImageToClipboard(src);
+      alert('¡Imagen copiada al portapapeles!');
+    } catch (err) {
+      console.error(err);
+      alert('No se pudo copiar al portapapeles. Asegúrate de otorgar permisos en tu navegador.');
+    }
+  }
+  document.getElementById('context-menu').classList.add('hidden');
+};
+
+document.getElementById('menu-replace').onclick = (e) => {
+  e.stopPropagation();
+  if (!contextMenuTarget) return;
+  
+  // Limpiar otros estados de espera antes de activar este
+  resetWaitingState();
+  
+  waitingReplaceFrame = { ...contextMenuTarget };
+  document.getElementById('context-menu').classList.add('hidden');
+  renderAnimationsList(); // Renderizar de nuevo para mostrar el borde de advertencia
+};
+
+
 // --- Gestión de Datos ---
 async function loadCharacters() {
   characters = await db.characters.toArray();
@@ -415,15 +519,18 @@ function renderAnimationsList() {
 
       <div class="frames-scroll-area">
         <div class="frames-grid" id="frames-${anim.id}" ondragover="allowDrop(event)" ondrop="dropFrame(event, '${anim.id}')">
-          ${anim.frames.map((frame, fIndex) => `
-            <div class="frame-item" draggable="true" ondragstart="dragFrame(event, '${anim.id}', ${fIndex})" ondragend="dragEnd(event)">
-              <img src="${typeof frame === 'string' ? frame : frame.src}" class="frame-thumb">
-              <div class="frame-controls">
-                <input type="number" class="frame-repeat-input" value="${frame.repeat || 1}" onchange="updateFrameRepeat('${anim.id}', ${fIndex}, this.value)" min="1">
-                <button class="btn-frame-delete" onclick="removeFrame('${anim.id}', ${fIndex})">×</button>
+          ${anim.frames.map((frame, fIndex) => {
+            const isWaiting = waitingReplaceFrame && waitingReplaceFrame.animId === anim.id && waitingReplaceFrame.frameIndex === fIndex;
+            return `
+              <div class="frame-item ${isWaiting ? 'waiting-replace' : ''}" draggable="true" ondragstart="dragFrame(event, '${anim.id}', ${fIndex})" ondragend="dragEnd(event)" oncontextmenu="window.showFrameContextMenu(event, '${anim.id}', ${fIndex})" onclick="window.handleFrameClick(event, '${anim.id}', ${fIndex})">
+                <img src="${typeof frame === 'string' ? frame : frame.src}" class="frame-thumb">
+                <div class="frame-controls">
+                  <input type="number" class="frame-repeat-input" value="${frame.repeat || 1}" onchange="updateFrameRepeat('${anim.id}', ${fIndex}, this.value)" min="1">
+                  <button class="btn-frame-delete" onclick="removeFrame('${anim.id}', ${fIndex})">×</button>
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
           <button class="btn-add-frames-inline" id="btn-insert-${anim.id}" onclick="handleInsertImages('${anim.id}')">
             +
           </button>
@@ -557,10 +664,31 @@ function resetWaitingState() {
     }
     waitingAnimId = null;
   }
+  if (waitingReplaceFrame) {
+    waitingReplaceFrame = null;
+    renderAnimationsList();
+  }
 }
 
 // Pegar desde portapapeles
 window.addEventListener('paste', (e) => {
+  // 1. Si estamos esperando para reemplazar un frame específico
+  if (waitingReplaceFrame) {
+    const files = [];
+    if (e.clipboardData.items) {
+      for (let i = 0; i < e.clipboardData.items.length; i++) {
+        if (e.clipboardData.items[i].type.indexOf("image") !== -1) {
+          files.push(e.clipboardData.items[i].getAsFile());
+        }
+      }
+    }
+    if (files.length > 0) {
+      replaceFrameFile(files[0], waitingReplaceFrame.animId, waitingReplaceFrame.frameIndex);
+    }
+    return;
+  }
+
+  // 2. Si estamos esperando insertar nuevas imágenes al final de una animación
   if (!waitingAnimId) return;
   
   const files = [];
@@ -577,6 +705,30 @@ window.addEventListener('paste', (e) => {
     resetWaitingState();
   }
 });
+
+async function replaceFrameFile(file, animId, frameIndex) {
+  const anim = editingCharacter.animations.find(a => a.id === animId);
+  if (!anim || !anim.frames[frameIndex]) return;
+
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  await new Promise(r => {
+    reader.onload = () => {
+      if (typeof anim.frames[frameIndex] === 'string') {
+        anim.frames[frameIndex] = {
+          src: reader.result,
+          repeat: 1
+        };
+      } else {
+        anim.frames[frameIndex].src = reader.result;
+      }
+      r();
+    };
+  });
+  
+  waitingReplaceFrame = null;
+  renderAnimationsList();
+}
 
 async function processFiles(files, animId) {
   const anim = editingCharacter.animations.find(a => a.id === animId);
